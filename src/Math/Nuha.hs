@@ -6,7 +6,7 @@
 -- Stability   : experimental
 -- Portability : non-portable
 --
--- Nuha is a library for linear algebra and numerical computing based on multidimensional arrays. The fundamental container is @Data.Vector.Unboxed@.
+-- Nuha is a library for linear algebra based on multidimensional arrays. The fundamental container is @Data.Vector.Unboxed@.
 --
 -- The goals of Nuha are:
 --
@@ -16,7 +16,10 @@
 --
 -- * to be fast (although there haven't been many benchmarks yet)
 --
--- Please visit also my <https://github.com/jdkr/Nuha github-repository> for further information on this project.
+-- If there's time in the future, it is planned to implement algorithms of numerical analysis, e.g. solve linear systems, determinant, inverse, svd, eigenvalues, matrix decompositions ...
+--
+
+-- Please visit also my <https://github.com/jdkr/nuha github-repository> for further information on this project.
 
 
 module Math.Nuha

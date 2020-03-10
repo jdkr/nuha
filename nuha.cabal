@@ -1,5 +1,3 @@
-cabal-version: >= 1.10
-
 name:                nuha
 version:             0.1.0.0
 license:             BSD3
@@ -7,12 +5,22 @@ license-file:        LICENSE
 author:              Johannes Kropp
 maintainer:          jodak932@gmail.com
 copyright:           (c) Johannes Kropp 2020
-category:            Math
-synopsis:            linear algebra and numerical computing
+cabal-version:       >= 1.10
 build-type:          Simple
-extra-source-files:  CHANGELOG.md
+category:            Math, Numeric
+synopsis:            Multidimensional arrays, Linear algebra
+description:         A library for linear algebra based on multidimensional arrays
+
+extra-source-files:
+    CHANGELOG.md
+    README.md
+
+source-repository head
+    type:       git
+    location:   https://github.com/jdkr/nuha
 
 library
+    default-language:    Haskell2010
     exposed-modules:
         Math.Nuha
         Math.Nuha.Types
@@ -24,10 +32,11 @@ library
     hs-source-dirs:
         src
     build-depends:
-        base         >= 4.13.0 && < 4.14
-       ,vector       >= 0.12.1 && < 0.13
+        base        >= 4.13.0 && < 4.14
+       ,vector      >= 0.12.1 && < 0.13
 
 test-suite nuha-test
+    default-language:    Haskell2010
     type: exitcode-stdio-1.0
     main-is: Spec.hs
     other-modules:
@@ -36,6 +45,6 @@ test-suite nuha-test
         test
     build-depends:
         nuha
-       ,base         >= 4.13.0 && < 4.14
-       ,vector       >= 0.12.1 && < 0.13
+       ,base        >= 4.13.0 && < 4.14
+       ,vector      >= 0.12.1 && < 0.13
        ,clock

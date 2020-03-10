@@ -1,1 +1,1 @@
-Nuha is a library for linear algebra and numerical computing based on multidimensional arrays.
+Nuha is a library for linear algebra based on multidimensional arrays.
