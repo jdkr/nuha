@@ -5,6 +5,15 @@
 -- License     : BSD 3-Clause
 -- Maintainer  : Johannes Kropp <jodak932@gmail.com>
 
+{- Developer Information:
+For Runtime Testing do the following:
+    - comment in the dependency 'clock' to build-depends of the test-suite in the file nuha.cabal
+    - comment in the import line for System.Clock in this file
+    - comment in the functions 'toSec' and 'testRuntime' in this file
+This way is choosen, because this package should not depend on the clock package by default.
+Note: Runtime will be shorter if this file is compiled with ghc instead of interpreted by ghci.
+-}
+
 {-
 Links:
 https://chrisdone.com/posts/measuring-duration-in-haskell/
@@ -13,7 +22,7 @@ https://stackoverflow.com/questions/14163072/how-to-force-evaluation-in-haskell
 
 module Math.NuhaTest where
 
-import System.Clock (Clock(Monotonic), TimeSpec(..), toNanoSecs, getTime )
+-- import System.Clock (Clock(Monotonic), TimeSpec(..), toNanoSecs, getTime )
 import qualified Data.Vector.Unboxed as V
 
 import Math.Nuha.Instances
@@ -35,8 +44,10 @@ testAdj44 :: Array Double
 testAdj44 = adjugate44 a where
     a = array [4,4] [3,4,6,2,4,7,9,5,2,3,7,9,5,2,2,4]
 
-testCartprod :: [[Int]]
-testCartprod = cartProd [[0..999],[0..999]]
+testCartProd :: [[Int]]
+testCartProd =
+    cartProd [[1,2],[11,22],[111,222]]
+    -- cartProd [[0..999],[0..999]]
 
 testTranspose :: Array Int
 testTranspose = transpose a where
@@ -46,31 +57,38 @@ testTranspose = transpose a where
 
 testMult :: Array Double
 testMult = b |.| b where
-    -- b = array2d [[2,3,2], [5,2,6], [1,6,3]]
+    b = array2d [[2,3,2], [5,2,6], [1,6,3]]
     -- b = array [10,10] [0..99]
     -- b = array [100,100] [0..9999]
     -- b = array [500,500] [0..249999]
-    b = array [1000,1000] [0..999999]
-
-
--- Convenience Function for converting a TimeSpec from the clock-package
-toSecs :: TimeSpec -> Double
-toSecs timeSpec = secs where
-    nanoSecs = toNanoSecs timeSpec
-    secs = (fromIntegral nanoSecs) / 10^9
+    -- b = array [1000,1000] [0..999999]
 
 
 main = do
-    start <- getTime Monotonic
-    let !a = testMult
-    -- let !a = testInv33
-    -- let !a = testIndex
-    -- let !a = testTranspose
-    -- let !a = testCartprod
-    -- let !a = cartprod [[1,2],[11,22],[111,222]]
-    end <- getTime Monotonic
-    -- putStrLn $ show a
-    putStrLn $ show $ toSecs (end - start)
+    let a = testMult
+    -- let a = testInv33
+    -- let a = testInv44
+    -- let a = testTranspose
+    -- let a = testCartProd
+    putStrLn $ show a
 
 
 
+
+-- -- Convenience Function for converting a TimeSpec from the clock-package
+-- toSecs :: TimeSpec -> Double
+-- toSecs timeSpec = secs where
+--     nanoSecs = toNanoSecs timeSpec
+--     secs = (fromIntegral nanoSecs) / 10^9
+--
+--
+-- testRuntime = do
+--     start <- getTime Monotonic
+--     let !a = testMult
+--     let !a = testInv33
+--     let !a = testInv44
+--     let !a = testTranspose
+--     let !a = testCartProd
+--     end <- getTime Monotonic
+--     -- putStrLn $ show a
+--     putStrLn $ show $ toSecs (end - start)

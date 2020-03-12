@@ -45,6 +45,6 @@ test-suite nuha-test
         test
     build-depends:
         nuha
-       ,base        >= 4.13.0 && < 4.14
-       ,vector      >= 0.12.1 && < 0.13
-       ,clock
+       ,base
+       ,vector
+       -- ,clock       >= 0.8 && < 0.9,
