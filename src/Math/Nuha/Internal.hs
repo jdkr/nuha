@@ -1,5 +1,3 @@
-{-# OPTIONS_HADDOCK hide, ignore-exports #-}
-
 -- |
 -- Copyright   : (c) Johannes Kropp
 -- License     : BSD 3-Clause
@@ -7,10 +5,9 @@
 
 module Math.Nuha.Internal where
 
-import Data.Vector.Unboxed (Vector, Unbox, (!))
+import Data.Vector.Unboxed (Unbox)
 import qualified Data.Vector.Unboxed as V
 
-import Math.Nuha.Types
 
 
 cartProd :: [[Int]] -> [[Int]]
@@ -23,7 +20,7 @@ cartProd mIdcs
 
 fromIndexToMultiIndex :: [Int] -> Int -> [Int]
 {-# INLINE fromIndexToMultiIndex #-}
--- ^ unsafe function for convert an 1d index (of the array values) to a multiindex of the array
+-- ^ unsafe function for convert an 1d index (of the holor values) to a multiindex of the holor
 fromIndexToMultiIndex strides idx = iterIndices idx 0 where
     iterIndices p i
         | (i+1) < length strides = div : iterIndices mod (i+1)
@@ -37,20 +34,28 @@ fromMultiIndexToIndex
     -> [Int] -- ^ multiindex
     -> Int -- ^ index
 {-# INLINE fromMultiIndexToIndex #-}
--- ^ unsafe function for convert multiindex of the array to a an 1d index (of the array values)
+-- ^ unsafe function for convert multiindex of the holor to a an 1d index (of the holor values)
 fromMultiIndexToIndex strides mIdx = sum (zipWith (*) strides mIdx)
 
-fromShapeToStrides :: [Int] -> [Int]
-{-# INLINE fromShapeToStrides #-}
--- ^ calculates the arrays strides from array shape
-fromShapeToStrides shape = [foldr (*) 1 (drop i shape) | i <- [1..length shape]]
+frohShapeToStrides :: [Int] -> [Int]
+{-# INLINE frohShapeToStrides #-}
+-- ^ calculates the holors strides from holor shape
+frohShapeToStrides shape = [foldr (*) 1 (drop i shape) | i <- [1..length shape]]
 
-fromShapeToMultiIndices :: [Int] -> [[Int]]
-{-# INLINE fromShapeToMultiIndices #-}
--- ^ calculates all possible multiindices for an array from its shape
-fromShapeToMultiIndices shape = mIdcs where
+frohShapeToMultiIndices :: [Int] -> [[Int]]
+{-# INLINE frohShapeToMultiIndices #-}
+-- ^ calculates all possible multiindices for a holor from its shape
+frohShapeToMultiIndices shape = mIdcs where
     mIdcs = cartProd ranges
     ranges = [[0..s-1] | s <- shape]
+
+isValidIdx
+    :: Int -- ^ length
+    -> Int -- ^ idx
+    -> Bool
+{-# INLINE isValidIdx #-}
+-- ^ tests whether an index is valid
+isValidIdx len idx = (idx < len) && (idx >= 0)
 
 isValidMIdx
     :: [Int] -- ^ shape
@@ -71,10 +76,5 @@ isValidMIdcs
 -- ^ tests whether multiindices are valid
 isValidMIdcs shp mIdcs =
     length mIdcs == length shp &&
-    and [and $ fmap (\k -> (0<=k && k<shp!!i) ) (mIdcs!!i) | i<-[0 .. length mIdcs - 1]]
+    and [and $ fmap (\k -> (0<=k && k < shp!!i) ) (mIdcs!!i) | i<-[0 .. length mIdcs - 1]]
 
-isValidArray :: Unbox a => Array a -> Bool
-{-# INLINE isValidArray #-}
--- ^ tests whether an array is instanced correctly, i.e. shape, strides and values fit together
-isValidArray array = V.length (aValues array) == product (aShape array)
-    && fromShapeToStrides (aShape array) == aStrides array

@@ -1,5 +1,5 @@
-{-# OPTIONS_HADDOCK hide, ignore-exports #-}
--- {-# LANGUAGE BangPatterns #-}  -- for Debug.Trace
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}  -- for Debug.Trace
 
 -- |
 -- Copyright   : (c) Johannes Kropp
@@ -9,11 +9,11 @@
 module Math.Nuha.Base where
 
 import qualified Prelude as P
-import Prelude hiding (map, replicate)
+import Prelude hiding (map, replicate, (!!))
 import Control.Monad (zipWithM_)
 -- import qualified Debug.Trace as D
 import Foreign.Storable (Storable, sizeOf)
-import Data.Vector.Unboxed (Vector, Unbox, (!))
+import Data.Vector.Unboxed (Vector, Unbox)
 import qualified Data.Vector.Unboxed as V
 import qualified Data.Vector.Unboxed.Mutable as VM
 
@@ -22,10 +22,10 @@ import Math.Nuha.Internal
 
 
 -- Naming conventions for indices:
--- idx : index for aValues :: Int
--- idcs : list of indices for aValues :: [Int]
--- mIdx : multiindex for an array :: [Int]
--- mIdcs : list of multiindices for an array :: [[Int]]
+-- idx : index for hValues :: Int
+-- idcs : list of indices for hValues :: [Int]
+-- mIdx : multiindex for a holor :: [Int]
+-- mIdcs : list of multiindices for a holor :: [[Int]]
 
 
 {- Some usefull links:
@@ -46,17 +46,17 @@ https://www.schoolofhaskell.com/user/commercial/content/vector
 -------------------
 -- ** Constructions
 
-array :: Unbox a => [Int] -> [a] -> Array a
-{-# INLINE array #-}
-{- ^ Basic function for creating a multidimensional array
+holor :: Unbox a => [Int] -> [a] -> Holor a
+{-# INLINE holor #-}
+{- ^ Basic function for creating a holor
 
->>> array [2,2] [1,2,3,4]
+>>> holor [2,2] [1,2,3,4]
   1.0  2.0
   3.0  4.0
->>> array [2,2] [1,2,3,4] :: Array Int
+>>> holor [2,2] [1,2,3,4] :: Holor Int
   1  2
   3  4
->>> array [2,2,4] [1 .. 16]
+>>> holor [2,2,4] [1 .. 16]
 [0,:,:] =
   1.0  2.0  3.0  4.0
   5.0  6.0  7.0  8.0
@@ -65,253 +65,319 @@ array :: Unbox a => [Int] -> [a] -> Array a
   13.0  14.0  15.0  16.0
 
 -}
-array shape values
-    | foldr (*) 1 shape == length values =
-        Array shape (fromShapeToStrides shape) (V.fromList values)
-    | otherwise = error $ "array : length of values " ++ show (length values) ++
-        " doesn't match to shape " ++ show shape
+holor shape values
+    | length shape < 2 = error $ "holor : a holor must have at least a dimension of 2"
+    | foldr (*) 1 shape /= length values = error $ "holor : length of values "
+        ++ show (length values) ++ " doesn't match to shape " ++ show shape
+    | otherwise = Holor shape (frohShapeToStrides shape) (V.fromList values)
 
--- TODO: Fehlerbehandlung wenn values ungleich [a]
-array1d :: Unbox a => [a] -> Array a
-{-# INLINE array1d #-}
-{- ^ Convenience function for creating a 1d-array
+vector :: Unbox a => [a] -> Holor a
+{-# INLINE vector #-}
+{- ^ Convenience function for creating a column-vector (2d-holor with shape [n,1])
 
->>> array1d [1,2,3,4]
- 1.0  2.0  3.0  4.0
+>>> vector [1,2,3,4]
+ 1.0
+ 2.0
+ 3.0
+ 4.0
 -}
-array1d values = Array shape (fromShapeToStrides shape) (V.fromList values) where
-    shape = [length values]
+vector values = Holor [length values, 1] [1, 1] (V.fromList values)
 
-array2d :: Unbox a => [[a]] -> Array a
-{-# INLINE array2d #-}
-{- ^ Convenience function for creating a 2d-array
+matrix :: Unbox a => [[a]] -> Holor a
+{-# INLINE matrix #-}
+{- ^ Convenience function for creating a matrix (2d-holor)
 
->>> array2d [[1,2],[3,4]]
+>>> matrix [[1,2],[3,4]]
   1.0  2.0
   3.0  4.0
 -}
-array2d valuesList
-    | lengths1dAreEqual = Array shape (fromShapeToStrides shape) (V.fromList values)
-    | otherwise = error $ "array2d : shape mismatch in nested list"
+matrix valuesList
+    | lengths1dAreEqual = Holor shape (frohShapeToStrides shape) (V.fromList values)
+    | otherwise = error $ "matrix : shape mismatch in nested list"
     where
         lengths1d = [length v1 | v1 <- valuesList]
         lengths1dAreEqual = all (== head lengths1d) (tail lengths1d)
         values = [entry | row <- valuesList , entry <- row]
         shape = [length valuesList, head lengths1d]
 
-fromVector :: Unbox a => [Int] -> Vector a -> Array a
-{-# INLINE fromVector #-}
-{- ^ Creates an array from a vector from 'Data.Vector.Unboxed'
+vector2 :: Unbox a => T2 a -> Holor a
+-- ^ Creates a 2x1 holor from a tuple
+vector2 (t1,t2) = Holor [2,1] [1,1] $ V.fromList [t1,t2]
 
->>> v = V.fromList [1,2,3,4]
->>> fromVector [2,2] v
-  1.0  2.0
-  3.0  4.0
--}
-fromVector shp vec
-    | foldr (*) 1 shp == V.length vec = Array shp (fromShapeToStrides shp) vec
-    | otherwise = error $ "fromVector : length of vector " ++ show (V.length vec) ++
-        " doesn't match to shape " ++ show shp
+vector3 :: Unbox a => T3 a -> Holor a
+-- ^ Creates a 3x1 holor from a tuple
+vector3 (t1,t2,t3) = Holor [3,1] [1,1] $ V.fromList [t1,t2,t3]
+
+vector4 :: Unbox a => T4 a -> Holor a
+-- ^ Creates a 4x1 holor from a tuple
+vector4 (t1,t2,t3,t4) = Holor [4,1] [1,1] $ V.fromList [t1,t2,t3,t4]
+
+matrix22 :: Unbox a => T22 a -> Holor a
+-- ^ Creates a 2x2 holor from nested tuples
+matrix22 ((t11,t12),(t21,t22)) =
+    Holor [2,2] [2,1] $ V.fromList [t11,t12,t21,t22]
+
+matrix32 :: Unbox a => T32 a -> Holor a
+-- ^ Creates a 3x2 holor from nested tuples
+matrix32 ((t11,t12),(t21,t22),(t31,t32)) =
+    Holor [3,2] [2,1] $ V.fromList [t11,t12,t21,t22,t31,t32]
+
+matrix42 :: Unbox a => T42 a -> Holor a
+-- ^ Creates a 4x2 holor from nested tuples
+matrix42 ((t11,t12),(t21,t22),(t31,t32),(t41,t42)) =
+    Holor [4,2] [2,1] $ V.fromList [t11,t12,t21,t22,t31,t32,t41,t42]
+
+matrix23 :: Unbox a => T23 a -> Holor a
+-- ^ Creates a 2x3 holor from nested tuples
+matrix23 ((t11,t12,t13),(t21,t22,t23)) =
+    Holor [2,3] [3,1] $ V.fromList [t11,t12,t13,t21,t22,t23]
+
+matrix33 :: Unbox a => T33 a -> Holor a
+-- ^ Creates a 3x3 holor from nested tuples
+matrix33 ((t11,t12,t13),(t21,t22,t23),(t31,t32,t33)) =
+    Holor [3,3] [3,1] $ V.fromList [t11,t12,t13,t21,t22,t23,t31,t32,t33]
+
+matrix43 :: Unbox a => T43 a -> Holor a
+-- ^ Creates a 4x3 holor from nested tuples
+matrix43 ((t11,t12,t13),(t21,t22,t23),(t31,t32,t33),(t41,t42,t43)) =
+    Holor [4,3] [3,1] $ V.fromList [t11,t12,t13,t21,t22,t23,t31,t32,t33,t41,t42,t43]
+
+matrix24 :: Unbox a => T24 a -> Holor a
+-- ^ Creates a 2x4 holor from nested tuples
+matrix24 ((t11,t12,t13,t14),(t21,t22,t23,t24)) =
+    Holor [2,4] [4,1] $ V.fromList [t11,t12,t13,t14,t21,t22,t23,t24]
+
+matrix34 :: Unbox a => T34 a -> Holor a
+-- ^ Creates a 3x4 holor from nested tuples
+matrix34 ((t11,t12,t13,t14),(t21,t22,t23,t24),(t31,t32,t33,t34)) =
+    Holor [3,4] [4,1] $ V.fromList [t11,t12,t13,t14,t21,t22,t23,t24,t31,t32,t33,t34]
+
+matrix44 :: Unbox a => T44 a -> Holor a
+-- ^ Creates a 4x4 holor from nested tuples
+matrix44 ((t11,t12,t13,t14),(t21,t22,t23,t24),(t31,t32,t33,t34),(t41,t42,t43,t44)) = Holor
+    [4,4] [4,1] $ V.fromList [t11,t12,t13,t14,t21,t22,t23,t24,t31,t32,t33,t34,t41,t42,t43,t44]
 
 
-replicate :: Unbox a => [Int] -> a -> Array a
+replicate :: Unbox a => [Int] -> a -> Holor a
 {-# INLINE replicate #-}
-{- ^ Creates an array for a given shape with all entries the same
+{- ^ Creates a holor for a given shape with all entries the same
 
->>> replicate [3] 0
+>>> replicate [1,3] 0
   0.0  0.0  0.0
 -}
-replicate shape value = array shape (P.replicate (product shape) value)
+replicate shape value = holor shape (P.replicate (product shape) value)
 
 
 ----------------
 -- ** Properties
 
-shape :: Unbox a => Array a -> [Int]
+shape :: Unbox a => Holor a -> [Int]
 {-# INLINE shape #-}
--- ^ Shape of an array
-shape = aShape
+-- ^ Shape of a holor
+shape = hShape
 
-numItems :: Unbox a => Array a -> Int
-{-# INLINE numItems #-}
--- ^ Number of entrys in array
-numItems arr = product (shape arr)
+numElems :: Unbox a => Holor a -> Int
+{-# INLINE numElems #-}
+-- ^ Number of holor entrys
+numElems hlr = product (shape hlr)
 
-sizeItems :: (Unbox a, Storable a) => Array a -> Int
-{-# INLINE sizeItems #-}
--- ^ Size of all array elements in bytes (not equal to consumed memory of the array)
-sizeItems arr = (numItems arr) * (sizeItem arr)
+sizeOfElems :: (Unbox a, Storable a) => Holor a -> Int
+{-# INLINE sizeOfElems #-}
+-- ^ Size of all holor elements in bytes (not equal to consumed memory of the holor)
+sizeOfElems hlr = (numElems hlr) * (sizeOfElem hlr)
 
-sizeItem :: (Unbox a, Storable a) => Array a -> Int
-{-# INLINE sizeItem #-}
--- ^ Size of a single array element in bytes
-sizeItem arr = sizeOf $ (aValues arr)!0
+sizeOfElem :: forall a . (Unbox a, Storable a) => Holor a -> Int
+{-# INLINE sizeOfElem #-}
+-- ^ Size of a single holor element in bytes
+sizeOfElem hlr = sizeOf (undefined::a) -- requires "ScopedTypeVariables" and "forall a"
 
-dim :: Unbox a => Array a -> Int
+dim :: Unbox a => Holor a -> Int
 {-# INLINE dim #-}
-{- ^ Dimension of an array (length of shape)
+{- ^ Dimension of a holor (length of shape)
 
->>> dim $ array [2,2,2] [0..7]
+>>> dim $ holor [2,2,2] [0..7]
 3
 -}
-dim = length . aShape
+dim = length . hShape
 
 
 ---------------
 -- ** Accessors
 
+infixl 9 !
+infixl 9 !!
 infixl 9 |!
-infixl 9 ||!
 infixl 9 |!!
+infixl 9 ||!
 infixl 9 ||!!
 
+(!) :: Unbox a => Holor a -> Int -> a
+{-# INLINE (!) #-}
+{- ^ Indexing a holor with shape (n,1) (column-vector) or (1,n) (row-vector)
 
-(|!) :: Unbox a => Array a -> [Int] -> a
+>>> v = vector [5,6,7]
+>>> v!1
+6.0
+-}
+(!) vec idx
+    | not $ length shape == 2 && (product shape == len)
+        = error $ "(!) : indexing with single Int only possible for column or row vectors"
+    | not $ isValidIdx len idx
+        = error $ "(!) : index out of range"
+    | otherwise = values V.! idx
+    where
+        shape = hShape vec
+        values = hValues vec
+        len = V.length values
+
+(!!) :: Unbox a => Holor a -> Int -> a
+{-# INLINE (!!) #-}
+-- ^ Unsafe version of (!) without checking for row or column vector and not checking bounds
+(!!) vec idx = (hValues vec) V.! idx
+
+
+(|!) :: Unbox a => Holor a -> [Int] -> a
 {-# INLINE (|!) #-}
-{- ^ Indexing a single entry of the array
+{- ^ Indexing a single entry of the holor
 
->>> a = array2d [[2,3,4],[5,6,3],[9,0,2]]
->>> a|![0,2]
+>>> m = matrix [[2,3,4],[5,6,3],[9,0,2]]
+>>> m|![0,2]
 4.0
 -}
-(|!) arr mIdx
-    | isValidMIdx (aShape arr) mIdx = arr||!mIdx
+(|!) hlr mIdx
+    | isValidMIdx (hShape hlr) mIdx = hlr|!!mIdx
     | otherwise = error $ "(|!) : multiindex " ++ show mIdx ++ " out of bounds"
 
-(||!) :: Unbox a => Array a -> [Int] -> a
-{-# INLINE (||!) #-}
--- ^ Unsafe version of (|!) without checking bounds
-(||!) arr mIdx = V.unsafeIndex (aValues arr) vectorindex where
-    vectorindex = fromMultiIndexToIndex (aStrides arr) mIdx
-
-
--- TODO: Test1 OK für 2d-array. TODO: Teste noch höherdimensionale arrays
-(|!!) :: Unbox a => Array a -> [[Int]] -> Array a
+(|!!) :: Unbox a => Holor a -> [Int] -> a
 {-# INLINE (|!!) #-}
-{- ^ Multidemensional indexing (extract a subarray). For each dimension a list of indices define the axes to extract. This means multiindexing is done by a nested list of indices which has the same length as the shape. The dimension of the extracted arrays stays the same as the original array.
+-- ^ Unsafe version of (|!) without checking bounds
+(|!!) hlr mIdx = V.unsafeIndex (hValues hlr) vectorindex where
+    vectorindex = fromMultiIndexToIndex (hStrides hlr) mIdx
 
->>> a = array [4,4] [1..16]
->>> a
+
+
+(||!) :: Unbox a => Holor a -> [[Int]] -> Holor a
+{-# INLINE (||!) #-}
+{- ^ Multidimensional indexing (extract a subholor). For each dimension a list of indices define the axes to extract. This means multiindexing is done by a nested list of indices which has the same length as the shape. The dimension of the extracted subholor remains the same as that of the original holor.
+
+>>> h = holor [4,4] [1..16]
+>>> h
   1.0  2.0  3.0  4.0
   5.0  6.0  7.0  8.0
   9.0  10.0  11.0  12.0
   13.0  14.0  15.0  16.0
->>> a|!![[1,2,3],[0,1,1,2,3]]
+>>> h||![[1,2,3],[0,1,1,2,3]]
   5.0  6.0  6.0  7.0  8.0
   9.0  10.0  10.0  11.0  12.0
   13.0  14.0  14.0  15.0  16.0
 -}
-(|!!) arr mIdcs
-    | isValidMIdcs (aShape arr) mIdcs = arr||!!mIdcs
-    | otherwise = error $ "(|!!) : multiindices " ++ show mIdcs ++ " invalid"
+(||!) hlr mIdcs
+    | isValidMIdcs (hShape hlr) mIdcs = hlr||!!mIdcs
+    | otherwise = error $ "(||!) : multiindices " ++ show mIdcs ++ " invalid"
 
-(||!!) :: Unbox a => Array a -> [[Int]] -> Array a
+(||!!) :: Unbox a => Holor a -> [[Int]] -> Holor a
 {-# INLINE (||!!) #-}
--- ^ Unsafe version of (|!!) without checking multiindices
-(||!!) arr mIdcs = Array shp (fromShapeToStrides shp) (V.fromList values) where
+-- ^ Unsafe version of (||!) without checking multiindices
+(||!!) hlr mIdcs = Holor shp (frohShapeToStrides shp) (V.fromList values) where
     shp = fmap length mIdcs
-    values = [ arr||!indices | indices <- cartProd mIdcs]
+    values = [ hlr|!!indices | indices <- cartProd mIdcs]
 
 
 {- TODO:
--- TODO: slice soll die Funktion V.unsafeSlice ausnutzen (auch hier zwei Versionen slice und unsafeSlice implementieren). TODO: Falls der Slice "quer" zur Richtung im Speicher verläuft erst ein transpose durchführen. FRAGE: Wieder mit V.thaw arbeiten?
 
 slice = undefined
 
 unsafeSlice = undefined
+
+Idea : use V.unsafeSlice and V.thaw
+
 -}
 
 ----------------
 -- ** Operations
 
-map :: (Unbox a, Unbox b) => (a -> b) -> Array a -> Array b
+map :: (Unbox a, Unbox b) => (a -> b) -> Holor a -> Holor b
 {-# INLINE map #-}
--- ^ map a function over all entries of an array
-map f arr = Array (aShape arr) (aStrides arr) (V.map f $ aValues arr)
+-- ^ map a function over all entries of a holor
+map f hlr = Holor (hShape hlr) (hStrides hlr) (V.map f $ hValues hlr)
 
 
-filter :: (Unbox a) => (a -> Bool) -> Array a -> Vector a
+filter :: (Unbox a) => (a -> Bool) -> Holor a -> [a]
 {-# INLINE filter #-}
-{- ^ filter the values of an array by a condition. The remaining elements are returned in a vector.
+{- ^ filter the values of a holor by a condition. The remaining elements are returned in a list.
 
->>> a = array [3,3,3] [1 .. 27] :: Array Int
->>> filter (\e -> mod e 3 == 0) a
+>>> h = holor [3,3,3] [1 .. 27] :: Holor Int
+>>> filter (\e -> mod e 3 == 0) h
 [3,6,9,12,15,18,21,24,27]
 -}
-filter cond arr = V.filter cond (aValues arr)
+filter cond hlr = V.toList $ V.filter cond (hValues hlr)
 
 -- TODO: may be working also with V.findIndices!
-selectBy :: Unbox a => (a -> Bool) -> Array a -> [[Int]]
+selectBy :: Unbox a => (a -> Bool) -> Holor a -> [[Int]]
 {-# INLINE selectBy #-}
-{- ^ select all indices of an array that fulfill a condition
+{- ^ select all multiindices of a holor whose corresponding elements fulfill a condition.
 
->>> a = array2d [[-1,1],[-2,3]]
->>> selectBy (>0) a
+>>> m = matrix [[-1,1],[-2,3]]
+>>> selectBy (>0) m
   [[0,1],[1,1]]
 -}
-selectBy cond arr = fillList 0 [] where
+selectBy cond hlr = fillList 0 [] where
     fillList idx list
-        | idx < V.length (aValues arr)
+        | idx < V.length (hValues hlr)
             = case () of
-              _ | cond val -> (fromIndexToMultiIndex (aStrides arr) idx) : (fillList (idx+1) list)
+              _ | cond val -> (fromIndexToMultiIndex (hStrides hlr) idx) : (fillList (idx+1) list)
                 | otherwise -> fillList (idx+1) list
         | otherwise = list
-        where val = (aValues arr)!idx
+        where val = (hValues hlr)V.!idx
 
 
 
-countBy :: Unbox a => (a -> Bool) -> Array a -> Int
+countBy :: Unbox a => (a -> Bool) -> Holor a -> Int
 {-# INLINE countBy #-}
--- ^ count elements of array that fulfill a condition
-countBy cond arr = V.sum $ V.map fromEnum (V.map cond (aValues arr))
+-- ^ count elements of a holor that fulfill a condition
+countBy cond hlr = V.sum $ V.map fromEnum (V.map cond (hValues hlr))
 
-accumulate :: Unbox a => (a -> a -> a) -> Array a -> Vector a
+accumulate :: Unbox a => (a -> a -> a) -> Holor a -> [a]
 {-# INLINE accumulate #-}
-{- ^ accumulate the values of an array by a function
+{- ^ accumulate the values of a holor by a function.
 
->>> a = array1d [2,3,4,1] :: Array Int
->>> accumulate (+) a
+>>> v = vector [2,3,4,1] :: Holor Int
+>>> accumulate (+) v
   [2,5,9,10]
->>> accumulate max a
+>>> accumulate max v
   [2,3,4,4]
 -}
-accumulate f arr = V.scanl1 f (aValues arr)
+accumulate f hlr = V.toList $ V.scanl1 f (hValues hlr)
 
-
-flatten :: Unbox a => Array a -> Array a
+flatten :: Unbox a => Holor a -> Holor a
 {-# INLINE flatten #-}
--- ^ flatten an array to a 1d-array
-flatten arr = Array [product $ aShape arr] [1] (aValues arr)
+-- ^ flatten a holor to a column vector
+flatten hlr = Holor [product $ hShape hlr, 1] [1,1] (hValues hlr)
 
-toVector :: Unbox a => Array a -> Vector a
-{-# INLINE toVector #-}
--- ^ flatten an array to a vector
-toVector arr = aValues arr
-
-transpose :: Unbox a => Array a -> Array a
+transpose :: Unbox a => Holor a -> Holor a
 {-# INLINE transpose #-}
--- ^ transpose an array
-transpose arr = Array shapeOut stridesOut valuesOut where
-    shapeOut = reverse (shape arr)
-    stridesOut = fromShapeToStrides shapeOut
-    valuesOut = V.fromList [ arr||!(reverse idcs) | idcs <- fromShapeToMultiIndices shapeOut]
+-- ^ transpose a holor
+transpose hlr = Holor shapeOut stridesOut valuesOut where
+    shapeOut = reverse (hShape hlr)
+    stridesOut = frohShapeToStrides shapeOut
+    valuesOut = V.fromList [ hlr|!!(reverse idcs) | idcs <- frohShapeToMultiIndices shapeOut]
 
 {-
 -- TODO:
 -- Idea: Use V.unsafeSlice. Should be easier than flipCols since values are in row-major order.
-flipRows :: Int -> Array a -> Array a
+flipRows :: Int -> Holor a -> Holor a
 {-# INLINE flipRows #-}
 -- ^ flip rows in reversed order for a given dimension
-flipRows dim arr = undefined
-    -- = Array (shape arr) (aStrides arr) values where
+flipRows dim hlr = undefined
+    -- = Holor (shape hlr) (hStrides hlr) values where
     -- values = undefined
 
 -- TODO:
--- Idea: first transpose array, then use flipRows, then transpose again?
-flipCols :: Int -> Array a -> Array a
+-- Idea: first transpose holor, then use flipRows, then transpose again?
+flipCols :: Int -> Holor a -> Holor a
 {-# INLINE flipCols #-}
 -- ^ flip columns in reversed order for a given dimension
-flipCols dim arr = undefined
+flipCols dim hlr = undefined
 -}
 
 {-
@@ -322,83 +388,221 @@ tile = undefined
 concat = undefined
 -}
 
-
-reshape :: Unbox a => Array a -> [Int] -> Array a
+reshape :: Unbox a => Holor a -> [Int] -> Holor a
 {-# INLINE reshape #-}
-{- ^ reshape an array without changing the order of underlying values
+{- ^ reshape a holor without changing the order of the underlying values
 
->>> a = array [2,2,2] [1 .. 8]
->>> reshape a [2,4]
+>>> h = holor [2,2,2] [1 .. 8]
+>>> reshape h [2,4]
   1.0  2.0  3.0  4.0
   5.0  6.0  7.0  8.0
 -}
-reshape arr shp
-    | product (shape arr) == product shp = Array shp (fromShapeToStrides shp) (aValues arr)
+reshape hlr shp
+    | product (shape hlr) == product shp = Holor shp (frohShapeToStrides shp) (hValues hlr)
     | otherwise = error $
-        "reshape : cannot reshape from " ++ show (shape arr) ++ " to " ++ show shp
+        "reshape : cannot reshape from " ++ show (shape hlr) ++ " to " ++ show shp
 
 
-diagonal :: Unbox a => Array a -> Vector a
+diagonal :: Unbox a => Holor a -> Holor a
 {-# INLINE diagonal #-}
--- ^ get diagonal of a quadratical matrix (2d-array) as a vector
-diagonal arr
-    | isSquare arr = V.fromList [arr ||! [i,i] | i <- [0 .. head (shape arr)-1]]
-    | otherwise = error $ "diagonal : Array must me 2d and quadratical"
+-- ^ get diagonal of a quadratical matrix (2d-holor) as a column vector
+diagonal hlr
+    | isSquare hlr = vector [hlr |!! [i,i] | i <- [0 .. head (shape hlr)-1]]
+    | otherwise = error $ "diagonal : Holor must be in quadratical matrix form"
 
 
-isSquare :: Unbox a => Array a -> Bool
-{-# INLINE isSquare #-}
--- ^ checks if an array has the shape of a square matrix
-isSquare arr = (length shp == 2) && (and $ P.map (== head shp) (tail shp)) where
-    shp = shape arr
 
+-------------------
+-- ** Conversions
+
+toList :: Unbox a => Holor a -> [a]
+{-# INLINE toList #-}
+-- ^ returns the holor values in a list
+toList hlr = V.toList $ hValues hlr
+
+toList2 :: Unbox a => Holor a -> [[a]]
+{-# INLINE toList2 #-}
+-- ^ returns the values of an 2d-holor in a list of lists
+toList2 hlr
+    | not (length shp == 2) = error $ "toList2 : not a 2d-holor"
+    | otherwise = [ [ hlr|!![i,j] | j <- [0 .. n-1]] | i <- [0 .. m-1]]
+    where
+        shp = shape hlr
+        [m,n] = shp
+
+toScalar :: Unbox a => Holor a -> a
+{-# INLINE toScalar #-}
+-- ^ converts a holor with a single element to the element itself
+toScalar hlr
+    | V.length (hValues hlr) == 1 = V.head (hValues hlr)
+    | otherwise = error $ "toScalar : not a holor with a single element"
+
+
+toT2 :: Unbox a => Holor a -> T2 a
+-- ^ converts a holor to a 2-tuple if possible
+toT2 hlr
+    | hShape hlr == [2,1] || hShape hlr == [1,2] = (t1,t2)
+    | otherwise = error $ "toT2 : shape mismatch"
+    where
+        [t1,t2] = toList hlr
+
+toT3 :: Unbox a => Holor a -> T3 a
+-- ^ converts a holor to a 3-tuple if possible
+toT3 hlr
+    | hShape hlr == [3,1] || hShape hlr == [1,3] = (t1,t2,t3)
+    | otherwise = error $ "toT3 : shape mismatch"
+    where
+        [t1,t2,t3] = toList hlr
+
+toT4 :: Unbox a => Holor a -> T4 a
+-- ^ converts a holor to a 4-tuple if possible
+toT4 hlr
+    | hShape hlr == [4,1] || hShape hlr == [1,4] = (t1,t2,t3,t4)
+    | otherwise = error $ "toT4 : shape mismatch"
+    where
+        [t1,t2,t3,t4] = toList hlr
+
+toT22 :: Unbox a => Holor a -> T22 a
+-- ^ converts a holor to nested 2,2-tuple if possible
+toT22 hlr
+    | hShape hlr == [2,2] = ((t11,t12),(t21,t22))
+    | otherwise = error $ "toT22 : shape mismatch"
+    where
+        [t11,t12,t21,t22] = toList hlr
+
+toT32 :: Unbox a => Holor a -> T32 a
+-- ^ converts a holor to nested 3,2-tuple if possible
+toT32 hlr
+    | hShape hlr == [3,2] = ((t11,t12),(t21,t22),(t31,t32))
+    | otherwise = error $ "toT32 : shape mismatch"
+    where
+        [t11,t12,t21,t22,t31,t32] = toList hlr
+
+toT42 :: Unbox a => Holor a -> T42 a
+-- ^ converts a holor to nested 4,2-tuple if possible
+toT42 hlr
+    | hShape hlr == [4,2] = ((t11,t12),(t21,t22),(t31,t32),(t41,t42))
+    | otherwise = error $ "toT42 : shape mismatch"
+    where
+        [t11,t12,t21,t22,t31,t32,t41,t42] = toList hlr
+
+toT23 :: Unbox a => Holor a -> T23 a
+-- ^ converts a holor to nested 2,3-tuple if possible
+toT23 hlr
+    | hShape hlr == [2,3] = ((t11,t12,t13),(t21,t22,t23))
+    | otherwise = error $ "toT23 : shape mismatch"
+    where
+        [t11,t12,t13,t21,t22,t23] = toList hlr
+
+toT33 :: Unbox a => Holor a -> T33 a
+-- ^ converts a holor to nested 3,3-tuple if possible
+toT33 hlr
+    | hShape hlr == [3,3] = ((t11,t12,t13),(t21,t22,t23),(t31,t32,t33))
+    | otherwise = error $ "toT33 : shape mismatch"
+    where
+        [t11,t12,t13,t21,t22,t23,t31,t32,t33] = toList hlr
+
+toT43 :: Unbox a => Holor a -> T43 a
+-- ^ converts a holor to nested 4,3-tuple if possible
+toT43 hlr
+    | hShape hlr == [4,3] = ((t11,t12,t13),(t21,t22,t23),(t31,t32,t33),(t41,t42,t43))
+    | otherwise = error $ "toT43 : shape mismatch"
+    where
+        [t11,t12,t13,t21,t22,t23,t31,t32,t33,t41,t42,t43] = toList hlr
+
+toT24 :: Unbox a => Holor a -> T24 a
+-- ^ converts a holor to nested 2,4-tuple if possible
+toT24 hlr
+    | hShape hlr == [2,4] = ((t11,t12,t13,t14),(t21,t22,t23,t24))
+    | otherwise = error $ "toT24 : shape mismatch"
+    where
+        [t11,t12,t13,t14,t21,t22,t23,t24] = toList hlr
+
+toT34 :: Unbox a => Holor a -> T34 a
+-- ^ converts a holor to nested 3,4-tuple if possible
+toT34 hlr
+    | hShape hlr == [3,4] = ((t11,t12,t13,t14),(t21,t22,t23,t24),(t31,t32,t33,t34))
+    | otherwise = error $ "toT34 : shape mismatch"
+    where
+        [t11,t12,t13,t14,t21,t22,t23,t24,t31,t32,t33,t34] = toList hlr
+
+toT44 :: Unbox a => Holor a -> T44 a
+-- ^ converts a holor to nested 4,4-tuple if possible
+toT44 hlr
+    | hShape hlr ==[4,4] =((t11,t12,t13,t14),(t21,t22,t23,t24),(t31,t32,t33,t34),(t41,t42,t43,t44))
+    | otherwise = error $ "toT44 : shape mismatch"
+    where
+        [t11,t12,t13,t14,t21,t22,t23,t24,t31,t32,t33,t34,t41,t42,t43,t44] = toList hlr
 
 
 -------------------
 -- ** Modifications
 
+setElem :: Unbox a => Holor a -> [Int] -> a -> Holor a
+{-# INLINE setElem #-}
+{- ^ modify a single entry of a holor
 
-setValue :: Unbox a => Array a -> [Int] -> a -> Array a
-{-# INLINE setValue #-}
-{- ^ modify a single entry of an array
-
->>> a = array1d [1,2,3]
->>> setValue a [1] 22
+>>> v = vector [1,2,3]
+>>> setElem v [1] 22
   1.0  22.0  3.0
 -}
-setValue arr mIdx value
-    | not (isValidMIdx (shape arr) mIdx) = error $ "setValue : multiindex invalid"
-    | otherwise = Array (aShape arr) (aStrides arr) valuesOut
+setElem hlr mIdx value
+    | not (isValidMIdx (shape hlr) mIdx) = error $ "setElem : multiindex invalid"
+    | otherwise = Holor (hShape hlr) (hStrides hlr) valuesOut
     where
     valuesOut = V.create $ do
         -- first yields mutable copy, then modifies and freezes it:
-        vec <- V.thaw $ aValues arr
-        let idx = fromMultiIndexToIndex (aStrides arr) mIdx
+        vec <- V.thaw $ hValues hlr
+        let idx = fromMultiIndexToIndex (hStrides hlr) mIdx
         VM.unsafeWrite vec idx value
         return vec
 
 
-setValues :: Unbox a => Array a -> [[Int]] -> [a] -> Array a
-{-# INLINE setValues #-}
-{- ^ modify many elements of an array at once
+setElems :: Unbox a => Holor a -> [[Int]] -> [a] -> Holor a
+{-# INLINE setElems #-}
+{- ^ modify many elements of a holor at once
 
->>> a = zeros [3,3] :: Array Int
->>> setValues a [[0,0],[1,1],[2,2]] [4,5,6]
+>>> h = zeros [3,3] :: Holor Int
+>>> setElems h [[0,0],[1,1],[2,2]] [4,5,6]
   4  0  0
   0  5  0
   0  0  6
 -}
-setValues arr mIdxList values
+-- TODO: Is there an faster alternative with V.(//) or V.unsafeUpd ?
+setElems hlr mIdxList values
     | length mIdxList /= length values =
-        error $ "setValues : length of list with multiindexes unequal to length of values"
-    | not (and (fmap (isValidMIdx (shape arr)) mIdxList)) =
-        error $ "setValues : list of multiindexes invalid"
-    | otherwise = Array (aShape arr) (aStrides arr) valuesOut
+        error $ "setElems : length of list with multiindexes unequal to length of values"
+    | not (and (fmap (isValidMIdx (shape hlr)) mIdxList)) =
+        error $ "setElems : list of multiindexes invalid"
+    | otherwise = Holor (hShape hlr) (hStrides hlr) valuesOut
     where
     valuesOut = V.create $ do
         -- first yields mutable copy, then modifies and freezes it:
-        vec <- V.thaw $ aValues arr
-        let idcs = fmap (fromMultiIndexToIndex (aStrides arr)) mIdxList
+        vec <- V.thaw $ hValues hlr
+        let idcs = fmap (fromMultiIndexToIndex (hStrides hlr)) mIdxList
         zipWithM_ (VM.unsafeWrite vec) idcs values
         return vec
 
+
+-------------------
+-- ** Checks
+
+isValidHolor :: Unbox a => Holor a -> Bool
+{-# INLINE isValidHolor #-}
+-- ^ tests whether a holor is instanced correctly, i.e. shape, strides and values fit together
+isValidHolor holor = V.length (hValues holor) == product (hShape holor)
+    && frohShapeToStrides (hShape holor) == hStrides holor
+
+isVector :: Unbox a => Holor a -> Bool
+{-# INLINE isVector #-}
+-- ^ tests whether a holor has shape [n,1] (column-vector) or [1,n] (row-vector)
+isVector hlr =
+    (length shp == 2) && (product shp == V.length (hValues hlr)) && (hStrides hlr == [1,1])
+    where
+        shp = hShape hlr
+
+isSquare :: Unbox a => Holor a -> Bool
+{-# INLINE isSquare #-}
+-- ^ checks if a holor has the shape of a square matrix
+isSquare hlr = (length shp == 2) && (and $ P.map (== head shp) (tail shp)) where
+    shp = shape hlr

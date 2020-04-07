@@ -1,4 +1,3 @@
-{-# OPTIONS_HADDOCK hide, ignore-exports #-}
 -- {-# LANGUAGE BangPatterns #-} -- for Debug.Trace
 
 -- |
@@ -9,8 +8,8 @@
 module Math.Nuha.Numeric where
 
 import qualified Prelude as P
-import Prelude hiding (map, replicate)
-import Data.Vector.Unboxed (Vector, Unbox)
+import Prelude hiding (map, sum, replicate)
+import Data.Vector.Unboxed (Unbox)
 import qualified Data.Vector.Unboxed as V
 -- import qualified Debug.Trace as D
 
@@ -21,38 +20,42 @@ import Math.Nuha.Internal
 ----------------
 -- ** Constructions
 
-diag :: (Unbox a, Num a) => Vector a -> Array a
+diag :: (Unbox a, Num a) => [a] -> Holor a
 {-# INLINE diag #-}
--- ^ diagonalizes a vector as 2d-array
-diag vec = setValues arr0 mIdcs (V.toList vec) where
-    len = V.length vec
+-- ^ diagonalizes a list of values as a square matrix
+diag lst = setElems hlr0 mIdcs lst where
+    len = length lst
     shape = [len, len]
-    arr0 = zeros [len, len]
+    hlr0 = zeros [len, len]
     mIdcs = [[i,i] | i <- [0..len-1]]
 
-zeros :: (Unbox a, Num a) => [Int] -> Array a
+zeros :: (Unbox a, Num a) => [Int] -> Holor a
 {-# INLINE zeros #-}
--- ^ array with all entries zero
+-- ^ holor with all entries zero
 zeros shape = replicate shape 0
 
-ones :: (Unbox a, Num a) => [Int] -> Array a
+ones :: (Unbox a, Num a) => [Int] -> Holor a
 {-# INLINE ones #-}
--- ^ array with all entries one
+-- ^ holor with all entries one
 ones shape = replicate shape 1
 
-eye :: (Unbox a, Num a) => Int -> Array a
+eye :: (Unbox a, Num a) => Int -> Holor a
 {-# INLINE eye #-}
--- ^ identity array
-eye dim = diag $ V.replicate dim 1
+-- ^ identity matrix
+eye dim = diag $ P.replicate dim 1
 
-linSpace :: (Unbox a, Fractional a, Enum a) => a -> a -> Int -> Vector a
+linSpace :: (Unbox a, Fractional a, Enum a) => a -> a -> Int -> Holor a
 {-# INLINE linSpace #-}
-{- ^ creates a vector with points in linear sequence
+{- ^ creates a column vector with points in linear sequence
 
 >>> linSpace 1 3 5
-[1.0,1.5,2.0,2.5,3.0]
+  1.0
+  1.5
+  2.0
+  2.5
+  3.0
 -}
-linSpace start stop num = V.fromList values where
+linSpace start stop num = vector values where
     values = [start + i*step | i <- [0.0 .. fromIntegral(num-1)]]
     step = (stop - start)/(fromIntegral (num-1))
 
@@ -60,372 +63,415 @@ linSpace start stop num = V.fromList values where
 ---------------
 -- ** Operators
 
-infixl 7 *|
+infixl 6 |+
+infixl 6 +|
+infixl 6 |-
+infixl 6 -|
 infixr 7 |*
+infixl 7 *|
+infixr 7 |/
+infixr 7 /|
 infixl 6 |+|
 infixl 6 |-|
 infixl 7 |*|
 infixl 7 |.|
-infixl 7 |.\
 infixr 8 |**
 infixr 8 |^
-infixl 7 /.\
 
-(*|) :: (Unbox a, Num a) => a -> Array a -> Array a
-{-# INLINE (*|) #-}
--- ^ Array multiplied by a scalar from left
-(*|) factor arr = map (*factor) arr
+(|+) :: (Unbox a, Num a) => Holor a -> a -> Holor a
+{-# INLINE (|+) #-}
+-- ^ Add a scalar from the right to each element of a holor
+(|+) hlr scalar = map (+scalar) hlr
 
-(|*) :: (Unbox a, Num a) => Array a -> a -> Array a
+(+|) :: (Unbox a, Num a) => a -> Holor a -> Holor a
+{-# INLINE (+|) #-}
+-- ^ Add a scalar from the left to each element of a holor
+(+|) scalar hlr = map (+scalar) hlr
+
+(|-) :: (Unbox a, Num a) => Holor a -> a -> Holor a
+{-# INLINE (|-) #-}
+-- ^ Subtract a scalar from the right to each element of a holor
+(|-) hlr scalar = map (+(-scalar)) hlr
+
+(-|) :: (Unbox a, Num a) => a -> Holor a -> Holor a
+{-# INLINE (-|) #-}
+-- ^ A single scalar is subtracted by each element of a holor
+(-|) scalar hlr = map (scalar-) hlr
+
+(|*) :: (Unbox a, Num a) => Holor a -> a -> Holor a
 {-# INLINE (|*) #-}
--- ^ Array multiplied by a scalar from right
-(|*) arr factor = factor *| arr
+-- ^ Holor multiplied by a scalar from right
+(|*) hlr factor = map (*factor) hlr
 
-(|+|) :: (Unbox a, Num a) => Array a -> Array a -> Array a
+(*|) :: (Unbox a, Num a) => a -> Holor a -> Holor a
+{-# INLINE (*|) #-}
+-- ^ Holor multiplied by a scalar from left
+(*|) factor hlr = map (*factor) hlr
+
+(|/) :: (Unbox a, Fractional a) => Holor a -> a -> Holor a
+{-# INLINE (|/) #-}
+-- ^ Holor divided by a scalar
+(|/) hlr divisor = map (/divisor) hlr
+
+(/|) :: (Unbox a, Fractional a) => a -> Holor a -> Holor a
+{-# INLINE (/|) #-}
+-- ^ A single scalar is divided by each element of a holor
+(/|) dividend hlr = map (dividend/) hlr
+
+(|+|) :: (Unbox a, Num a) => Holor a -> Holor a -> Holor a
 {-# INLINE (|+|) #-}
--- ^ elementwise array addition
-(|+|) a1 a2
-    | (aShape a1) == (aShape a2) =
-        Array (aShape a1) (aStrides a1) (V.zipWith (+) (aValues a1) (aValues a2))
-    | otherwise = error $ "(|+|) : Shape missmatch at elementwise array addition"
+-- ^ elementwise holor addition
+(|+|) h1 h2
+    | (hShape h1) == (hShape h2) =
+        Holor (hShape h1) (hStrides h1) (V.zipWith (+) (hValues h1) (hValues h2))
+    | otherwise = error $ "(|+|) : Shape missmatch at elementwise holor addition"
 
-
-(|-|) :: (Unbox a, Num a) => Array a -> Array a -> Array a
+(|-|) :: (Unbox a, Num a) => Holor a -> Holor a -> Holor a
 {-# INLINE (|-|) #-}
--- ^ elementwise array subtraction
-(|-|) a1 a2
-    | (aShape a1) == (aShape a2) =
-        Array (aShape a1) (aStrides a1) (V.zipWith (-) (aValues a1) (aValues a2))
-    | otherwise = error $ "(|-|) : Shape missmatch at elementwise array subtraction"
+-- ^ elementwise holor subtraction
+(|-|) h1 h2
+    | (hShape h1) == (hShape h2) =
+        Holor (hShape h1) (hStrides h1) (V.zipWith (-) (hValues h1) (hValues h2))
+    | otherwise = error $ "(|-|) : Shape missmatch at elementwise holor subtraction"
 
-(|*|) :: (Unbox a, Num a) => Array a -> Array a -> Array a
+(|*|) :: (Unbox a, Num a) => Holor a -> Holor a -> Holor a
 {-# INLINE (|*|) #-}
--- ^ elementwise array multiplication
-(|*|) a1 a2
-    | (aShape a1) == (aShape a2) =
-        Array (aShape a1) (aStrides a1) (V.zipWith (*) (aValues a1) (aValues a2))
-    | otherwise = error $ "(|*|) : Shape missmatch at elementwise array multiplication"
+-- ^ elementwise holor multiplication
+(|*|) h1 h2
+    | (hShape h1) == (hShape h2) =
+        Holor (hShape h1) (hStrides h1) (V.zipWith (*) (hValues h1) (hValues h2))
+    | otherwise = error $ "(|*|) : Shape missmatch at elementwise holor multiplication"
 
 
-(|.|) :: (Unbox a, Num a) => Array a -> Array a -> Array a
+(|.|) :: (Unbox a, Num a) => Holor a -> Holor a -> Holor a
 {-# INLINE (|.|) #-}
--- ^ Array multiplication, last dimension of left array has to match first dimension of right array
-(|.|) a1 a2
-    | dim a1 < 2 || dim a2 < 2 = error $ "(|.|) : array dimensions have to be at least 2"
-    | last (shape a1) /= matchdim =
-        error $ "(|.|) : dimension mismatch: " ++ show (shape a1) ++ " , " ++ show (shape a2)
-    | otherwise = Array shapeOut stridesOut valuesOut
+-- ^ Holor multiplication, last dimension of left holor has to match first dimension of right holor
+(|.|) h1 h2
+    | dim h1 < 2 || dim h2 < 2 = error $ "(|.|) : holor dimensions have to be at least 2"
+    | last (shape h1) /= matchdim =
+        error $ "(|.|) : dimension mismatch: " ++ show (shape h1) ++ " , " ++ show (shape h2)
+    | otherwise = Holor shapeOut stridesOut valuesOut
     where
-        shape1 = take (length (shape a1) - 1) (shape a1)
+        shape1 = take (length (shape h1) - 1) (shape h1)
         -- !shape1_ = D.trace ("shape1: " ++ show shape1) ()
-        shape2 = drop 1 (shape a2)
+        shape2 = drop 1 (shape h2)
         -- !shape2_ = D.trace ("shape2: " ++ show shape2) ()
         shapeOut = shape1 ++ shape2
-        stridesOut = fromShapeToStrides shapeOut
-        matchdim = head (shape a2) -- also step
+        stridesOut = frohShapeToStrides shapeOut
+        matchdim = head (shape h2) -- also step
         -- !matchdim_ = D.trace ("matchdim: " ++ show matchdim) ()
-        a2T = transpose a2
+        h2T = transpose h2
+        values1 = hValues h1
+        values2 = hValues h2T
         valuesOut = V.fromList [
             let
-                slice1 = V.unsafeSlice (i*matchdim) matchdim (aValues a1)
-                slice2 = V.unsafeSlice (j*matchdim) matchdim (aValues a2T)
+                slice1 = V.unsafeSlice (i*matchdim) matchdim values1
+                slice2 = V.unsafeSlice (j*matchdim) matchdim values2
             in
                 V.sum (V.zipWith (*) slice1 slice2)
             | i <- [0 .. (product shape1 - 1)], j <- [0 .. (product shape2 - 1)]]
 
 
-(|.\) :: (Unbox a, Num a) => Array a -> Vector a -> Vector a
-{-# INLINE (|.\) #-}
--- ^ Multiplication of an array and a vector with result as a vector
-(|.\) arr vec
-    | (length (shape arr) == 2) && (last (shape arr) == V.length vec) = values
-    | otherwise =
-        error $ "(|.\\) : dimension mismatch: " ++ show (shape arr) ++ " , " ++ show (V.length vec)
-    where
-        matchdim = V.length vec
-        values = V.fromList [
-            let
-                slice = V.unsafeSlice (i*matchdim) matchdim (aValues arr)
-            in
-                V.sum (V.zipWith (*) slice vec)
-            | i <- [0 .. matchdim-1]]
-
-
-(|**) :: (Unbox a, Floating a) => Array a -> a -> Array a
+(|**) :: (Unbox a, Floating a) => Holor a -> a -> Holor a
 {-# INLINE (|**) #-}
--- ^ Array to a power elementwise
-(|**) arr p = map (**p) arr
-
+-- ^ Holor to a power elementwise
+(|**) hlr p = map (**p) hlr
 
 -- TODO: may be optimized by saving power of two products
-(|^) :: (Unbox a, Num a) => Array a -> Int -> Array a
+(|^) :: (Unbox a, Num a) => Holor a -> Int -> Holor a
 {-# INLINE (|^) #-}
--- ^ Array multiplied with itself elementwise n-times
-(|^) arr num
+-- ^ Holor multiplied with itself elementwise n-times
+(|^) hlr num
     | num<0 = error $ "(|^) : number of multiplications must be non negative"
-    | not (isSquare arr) = error $ "(|^) : array is not of square shape :" ++ show (aShape arr)
-    | num == 0 = eye $ (shape arr)!!0
-    | otherwise = iterMult arr 0
+    | not (isSquare hlr) = error $ "(|^) : holor is not of square shape :" ++ show (hShape hlr)
+    | num == 0 = eye $ (shape hlr) P.!! 0
+    | otherwise = iterMult hlr 0
     where
-        iterMult arr_ n
-            | n == 1 = iterMult arr (n+1)
-            | n <= num = iterMult (arr |.| arr_) (n+1)
-            | otherwise = arr_
-
-
-
-(/.\) :: (Unbox a, Num a) => Vector a -> Vector a -> a
-{-# INLINE (/.\) #-}
--- ^ Dot product for vectors
-(/.\) v1 v2
-    | V.length v1 == V.length v2 = V.sum $ V.zipWith (*) v1 v2
-    | otherwise = error $ "(/.\\) : vectors of different lengths: "++
-        show (V.length v1) ++ " and " ++ show (V.length v2)
-
-dot :: (Unbox a, Num a) => Array a -> Array a -> a
-{-# INLINE dot #-}
--- ^ dot product for 1d arrays
-dot a1 a2
-    | (length (shape a1) == 1) && (shape a1 == shape a2) =
-        V.sum $ V.zipWith (*) (aValues a1) (aValues a2)
-    | otherwise =
-        error $ "dot : shapes " ++ show (shape a1) ++ " and " ++ show (shape a2) ++ "incompatible"
-
+        iterMult hlr_ n
+            | n == 1 = iterMult hlr (n+1)
+            | n <= num = iterMult (hlr |.| hlr_) (n+1)
+            | otherwise = hlr_
 
 ----------------
 -- ** Operations
 
-negate :: (Unbox a, Num a) => Array a -> Array a
+negate :: (Unbox a, Num a) => Holor a -> Holor a
 {-# INLINE negate #-}
--- ^ additive inverse of an array
+-- ^ additive inverse of a holor
 negate = map P.negate
 
-abs :: (Unbox a, Num a) => Array a -> Array a
+abs :: (Unbox a, Num a) => Holor a -> Holor a
 {-# INLINE abs #-}
--- ^ absolute values ​​by array elements
+-- ^ absolute values ​​by holor elements
 abs= map P.abs
 
-signum :: (Unbox a, Num a) => Array a -> Array a
+signum :: (Unbox a, Num a) => Holor a -> Holor a
 {-# INLINE signum #-}
--- ^ signum by array elements
+-- ^ signum by holor elements
 signum = map P.signum
 
-
-maximum :: (Unbox a, Ord a) => Array a -> a
+maximum :: (Unbox a, Ord a) => Holor a -> a
 {-# INLINE maximum #-}
--- ^ maximum of all array elements
-maximum arr = V.maximum $ aValues arr
+-- ^ maximum of all holor elements
+maximum hlr = V.maximum $ hValues hlr
 
-minimum :: (Unbox a, Ord a) => Array a -> a
+minimum :: (Unbox a, Ord a) => Holor a -> a
 {-# INLINE minimum #-}
--- ^ minimum of all array elements
-minimum arr = V.minimum $ aValues arr
+-- ^ minimum of all holor elements
+minimum hlr = V.minimum $ hValues hlr
 
-sum :: (Unbox a, Num a) => Array a -> a
+sum :: (Unbox a, Num a) => Holor a -> a
 {-# INLINE sum #-}
--- ^ sum all element of an array
-sum arr = V.sum $ aValues arr
+-- ^ sum all element of a holor
+sum hlr = V.sum $ hValues hlr
 
-trace :: (Unbox a, Num a) => Array a -> a
+trace :: (Unbox a, Num a) => Holor a -> a
 {-# INLINE trace #-}
 -- ^ trace of a matrix
-trace arr
-    | isSquare arr = V.sum $ diagonal arr
+trace hlr
+    | isSquare hlr = sum $ diagonal hlr
     | otherwise = error $
-        "trace : array with shape " ++ show (shape arr) ++ " is not a square matrix"
+        "trace : holor with shape " ++ show (shape hlr) ++ " is not a square matrix"
 
-
-norm :: (Unbox a, Real a, Unbox b, Floating b) => a -> Array a -> b
+norm :: (Unbox a, Real a, Unbox b, Floating b) => a -> Holor a -> b
 {-# INLINE norm #-}
--- ^ p-norm
-norm p arr = (V.sum $ V.map (\v -> (realToFrac v)**p') (aValues arr))**(1/p') where
+-- ^ p-norm of a holor
+norm p hlr = (V.sum $ V.map (\v -> (realToFrac v)**p') (hValues hlr))**(1/p') where
     p' = realToFrac p
 
-norm1 :: (Unbox a, Num a) => Array a -> a
+norm1 :: (Unbox a, Num a) => Holor a -> a
 {-# INLINE norm1 #-}
--- ^ manhattan norm (p = 1)
-norm1 arr = V.sum $ V.map (\v -> P.abs v) (aValues arr)
+-- ^ manhattan norm of a holor (p = 1)
+norm1 hlr = V.sum $ V.map (\v -> P.abs v) (hValues hlr)
 
-norm2 :: (Unbox a, Real a, Unbox b, Floating b) => Array a -> b
+norm2 :: (Unbox a, Real a, Unbox b, Floating b) => Holor a -> b
 {-# INLINE norm2 #-}
--- ^ frobenius norm, equal to euclidian norm for 1d-array (p = 2)
-norm2 arr = sqrt $ V.sum $ V.map (\v -> (realToFrac v)**2) (aValues arr)
+-- ^ frobenius norm of a holor. If the holor has vector form it's equal to the euclidian norm
+norm2 hlr = sqrt $ V.sum $ V.map (\v -> (realToFrac v)**2) (hValues hlr)
 
-normM :: (Unbox a, Num a, Ord a) => Array a -> a
+normM :: (Unbox a, Num a, Ord a) => Holor a -> a
 {-# INLINE normM #-}
--- ^ maximum norm (p = inf)
-normM arr = V.maximum $ V.map (\v -> P.abs v) (aValues arr)
+-- ^ maximum norm of a holor (p = inf)
+normM hlr = V.maximum $ V.map (\v -> P.abs v) (hValues hlr)
 
+normalize :: (Unbox a, Real a, Floating a) => a -> Holor a -> Holor a
+{-# INLINE normalize #-}
+-- ^ normalize a holor to unit-length in p-norm
+normalize p hlr = map (/(norm p hlr)) hlr
+
+normalize1 :: (Unbox a, Fractional a) => Holor a -> Holor a
+{-# INLINE normalize1 #-}
+-- ^ normalize a holor to unit-length in 1-norm
+normalize1 hlr = map (/(norm1 hlr)) hlr
+
+normalize2 :: (Unbox a, Real a, Floating a) => Holor a -> Holor a
+{-# INLINE normalize2 #-}
+-- ^ normalize a holor to unit-length in 2-norm
+normalize2 hlr = map (/(norm2 hlr)) hlr
+
+normalizeM :: (Unbox a, Fractional a, Ord a) => Holor a -> Holor a
+-- ^ normalize a holor to unit-length in maximum-norm
+{-# INLINE normalizeM #-}
+normalizeM hlr = map (/(normM hlr)) hlr
+
+dot :: (Unbox a, Num a) => Holor a -> Holor a -> a
+{-# INLINE dot #-}
+-- ^ dot product for holors with shape [n,1] (column-vector) or [1,n] (row-vector)
+dot v1 v2
+    | not $ isVector v1 && isVector v2 =
+        error $ "dot : arguments have no vector form"
+    | shape1 /= shape2 =
+        error $ "dot : shapes " ++ show (shape1) ++ " and " ++ show (shape2) ++ " incompatible"
+    | otherwise =
+        V.sum $ V.zipWith (*) (hValues v1) (hValues v2)
+    where
+        shape1 = shape v1
+        shape2 = shape v2
+
+cross :: (Unbox a, Num a) => Holor a -> Holor a -> Holor a
+{-# INLINE cross #-}
+-- ^ cross product for holors with shape [3,1] (column-vector) or [1,3] (row-vector)
+cross v1 v2
+    | not $ isVector v1 && isVector v2 =
+        error $ "cross : both arguments must be a column or row vector"
+    | not $ shape1 == shape2 && (shape1 == [3,1] || shape1 == [1,3]) =
+        error $ "cross : shapes " ++ show (shape1) ++ " and " ++ show (shape2) ++ " incompatible"
+    | otherwise = vector [v11*v22-v12*v21, v12*v20-v10*v22, v10*v21-v11*v20]
+    where
+        shape1 = shape v1
+        shape2 = shape v2
+        [v10, v11, v12] = toList v1
+        [v20, v21, v22] = toList v2
 
 {- TODO:
 -- Link: https://en.wikipedia.org/wiki/Adjugate_matrix
-adjugate :: (Unbox a, Num a) => Array a -> Array a
+adjugate :: (Unbox a, Num a) => Holor a -> Holor a
 {-# INLINE adjugate #-}
 -- ^ adjugate Matrix
-adjugate arr = undefined
+adjugate hlr = undefined
 -}
 
-adjugate22 :: (Unbox a, Num a) => Array a -> Array a
+adjugate22 :: (Unbox a, Num a) => Holor a -> Holor a
 {-# INLINE adjugate22 #-}
 -- ^ adjugate of 2x2 matrix
-adjugate22 arr22
-    | shape arr22 == [2,2] = array [2,2] values
-    | otherwise = error ("adjugate22 only possible for array with shape [2,2]")
+adjugate22 mat22
+    | shape mat22 == [2,2] = holor [2,2] values
+    | otherwise = error ("adjugate22 only possible for a holor with shape [2,2]")
     where
-        m00 =   arr22||![0,0]
-        m01 = - arr22||![1,0]
-        m10 = - arr22||![0,1]
-        m11 =   arr22||![1,1]
+        m00 =   mat22|!![0,0]
+        m01 = - mat22|!![1,0]
+        m10 = - mat22|!![0,1]
+        m11 =   mat22|!![1,1]
         values = [m11, m10, m01, m00]
 
-adjugate33 :: (Unbox a, Num a) => Array a -> Array a
+adjugate33 :: (Unbox a, Num a) => Holor a -> Holor a
 {-# INLINE adjugate33 #-}
 -- ^ adjugate of 3x3 matrix
-adjugate33 arr33
-    | shape arr33 == [3,3] = array [3,3] values
-    | otherwise = error ("adjugate33 only possible for array with shape [3,3]")
+adjugate33 mat33
+    | shape mat33 == [3,3] = holor [3,3] values
+    | otherwise = error ("adjugate33 only possible for a holor with shape [3,3]")
     where
-        a00 = arr33||![0,0]; a01 = arr33||![0,1]; a02 = arr33||![0,2]
-        a10 = arr33||![1,0]; a11 = arr33||![1,1]; a12 = arr33||![1,2]
-        a20 = arr33||![2,0]; a21 = arr33||![2,1]; a22 = arr33||![2,2]
-        m00 = a11*a22 - a12*a21
-        m01 = a12*a20 - a10*a22
-        m02 = a10*a21 - a11*a20
-        m10 = a02*a21 - a01*a22
-        m11 = a00*a22 - a02*a20
-        m12 = a01*a20 - a00*a21
-        m20 = a01*a12 - a02*a11
-        m21 = a02*a10 - a00*a12
-        m22 = a00*a11 - a01*a10
+        h00 = mat33|!![0,0]; h01 = mat33|!![0,1]; h02 = mat33|!![0,2]
+        h10 = mat33|!![1,0]; h11 = mat33|!![1,1]; h12 = mat33|!![1,2]
+        h20 = mat33|!![2,0]; h21 = mat33|!![2,1]; h22 = mat33|!![2,2]
+        m00 = h11*h22 - h12*h21
+        m01 = h12*h20 - h10*h22
+        m02 = h10*h21 - h11*h20
+        m10 = h02*h21 - h01*h22
+        m11 = h00*h22 - h02*h20
+        m12 = h01*h20 - h00*h21
+        m20 = h01*h12 - h02*h11
+        m21 = h02*h10 - h00*h12
+        m22 = h00*h11 - h01*h10
         values = [m00, m10, m20, m01, m11, m21, m02, m12, m22]
 
 -- Link: https://semath.info/src/inverse-cofactor-ex4.html
 -- (Adj44)_ij = (-1)^(i+j) * det33(M_ji)
-adjugate44 :: (Unbox a, Num a) => Array a -> Array a
+adjugate44 :: (Unbox a, Num a) => Holor a -> Holor a
 {-# INLINE adjugate44 #-}
 -- ^ adjugate of 4x4 matrix
-adjugate44 arr44
-    | shape arr44 == [4,4] = array [4,4] values
-    | otherwise = error ("adjugate44 only possible for array with shape [4,4]")
+adjugate44 mat44
+    | shape mat44 == [4,4] = holor [4,4] values
+    | otherwise = error ("adjugate44 only possible for a holor with shape [4,4]")
     where
-        a00 = arr44||![0,0]; a01 = arr44||![0,1]; a02 = arr44||![0,2]; a03 = arr44||![0,3]
-        a10 = arr44||![1,0]; a11 = arr44||![1,1]; a12 = arr44||![1,2]; a13 = arr44||![1,3]
-        a20 = arr44||![2,0]; a21 = arr44||![2,1]; a22 = arr44||![2,2]; a23 = arr44||![2,3]
-        a30 = arr44||![3,0]; a31 = arr44||![3,1]; a32 = arr44||![3,2]; a33 = arr44||![3,3]
-        m00 =   (det33 $ array [3,3] [a11,a12,a13,a21,a22,a23,a31,a32,a33])
-        m01 = - (det33 $ array [3,3] [a10,a12,a13,a20,a22,a23,a30,a32,a33])
-        m02 =   (det33 $ array [3,3] [a10,a11,a13,a20,a21,a23,a30,a31,a33])
-        m03 = - (det33 $ array [3,3] [a10,a11,a12,a20,a21,a22,a30,a31,a32])
-        m10 = - (det33 $ array [3,3] [a01,a02,a03,a21,a22,a23,a31,a32,a33])
-        m11 =   (det33 $ array [3,3] [a00,a02,a03,a20,a22,a23,a30,a32,a33])
-        m12 = - (det33 $ array [3,3] [a00,a01,a03,a20,a21,a23,a30,a31,a33])
-        m13 =   (det33 $ array [3,3] [a00,a01,a02,a20,a21,a22,a30,a31,a32])
-        m20 =   (det33 $ array [3,3] [a01,a02,a03,a11,a12,a13,a31,a32,a33])
-        m21 = - (det33 $ array [3,3] [a00,a02,a03,a10,a12,a13,a30,a32,a33])
-        m22 =   (det33 $ array [3,3] [a00,a01,a03,a10,a11,a13,a30,a31,a33])
-        m23 = - (det33 $ array [3,3] [a00,a01,a02,a10,a11,a12,a30,a31,a32])
-        m30 = - (det33 $ array [3,3] [a01,a02,a03,a11,a12,a13,a21,a22,a23])
-        m31 =   (det33 $ array [3,3] [a00,a02,a03,a10,a12,a13,a20,a22,a23])
-        m32 = - (det33 $ array [3,3] [a00,a01,a03,a10,a11,a13,a20,a21,a23])
-        m33 =   (det33 $ array [3,3] [a00,a01,a02,a10,a11,a12,a20,a21,a22])
+        h00 = mat44|!![0,0]; h01 = mat44|!![0,1]; h02 = mat44|!![0,2]; h03 = mat44|!![0,3]
+        h10 = mat44|!![1,0]; h11 = mat44|!![1,1]; h12 = mat44|!![1,2]; h13 = mat44|!![1,3]
+        h20 = mat44|!![2,0]; h21 = mat44|!![2,1]; h22 = mat44|!![2,2]; h23 = mat44|!![2,3]
+        h30 = mat44|!![3,0]; h31 = mat44|!![3,1]; h32 = mat44|!![3,2]; h33 = mat44|!![3,3]
+        m00 =   (det33 $ holor [3,3] [h11,h12,h13,h21,h22,h23,h31,h32,h33])
+        m01 = - (det33 $ holor [3,3] [h10,h12,h13,h20,h22,h23,h30,h32,h33])
+        m02 =   (det33 $ holor [3,3] [h10,h11,h13,h20,h21,h23,h30,h31,h33])
+        m03 = - (det33 $ holor [3,3] [h10,h11,h12,h20,h21,h22,h30,h31,h32])
+        m10 = - (det33 $ holor [3,3] [h01,h02,h03,h21,h22,h23,h31,h32,h33])
+        m11 =   (det33 $ holor [3,3] [h00,h02,h03,h20,h22,h23,h30,h32,h33])
+        m12 = - (det33 $ holor [3,3] [h00,h01,h03,h20,h21,h23,h30,h31,h33])
+        m13 =   (det33 $ holor [3,3] [h00,h01,h02,h20,h21,h22,h30,h31,h32])
+        m20 =   (det33 $ holor [3,3] [h01,h02,h03,h11,h12,h13,h31,h32,h33])
+        m21 = - (det33 $ holor [3,3] [h00,h02,h03,h10,h12,h13,h30,h32,h33])
+        m22 =   (det33 $ holor [3,3] [h00,h01,h03,h10,h11,h13,h30,h31,h33])
+        m23 = - (det33 $ holor [3,3] [h00,h01,h02,h10,h11,h12,h30,h31,h32])
+        m30 = - (det33 $ holor [3,3] [h01,h02,h03,h11,h12,h13,h21,h22,h23])
+        m31 =   (det33 $ holor [3,3] [h00,h02,h03,h10,h12,h13,h20,h22,h23])
+        m32 = - (det33 $ holor [3,3] [h00,h01,h03,h10,h11,h13,h20,h21,h23])
+        m33 =   (det33 $ holor [3,3] [h00,h01,h02,h10,h11,h12,h20,h21,h22])
         values = [m00,m10,m20,m30,m01,m11,m21,m31,m02,m12,m22,m32,m03,m13,m23,m33]
 
 {- TODO:
-det :: (Unbox a, Num a) => Array a -> a
+det :: (Unbox a, Num a) => Holor a -> a
 {-# INLINE det #-}
-det arr
-    | (length (shape arr) == 2) && ((shape arr)!!0 == (shape arr)!!1) = result
-    | otherwise = error ("det of nonsquare array with shape " ++ show (shape arr))
+det hlr
+    | (length (shape hlr) == 2) && ((shape hlr) P.!! 0 == (shape hlr) P.!! 1 = result
+    | otherwise = error $ "det of nonsquare holor with shape " ++ show (shape hlr)
     where
         result = undefined
 -}
 
 
-det22 :: (Unbox a, Num a) => Array a -> a
+det22 :: (Unbox a, Num a) => Holor a -> a
 {-# INLINE det22 #-}
 -- ^ determinant of 2x2 matrix
-det22 arr22
-    | shape arr22 == [2,2] = a00*a11 - a01*a10
-    | otherwise = error ("det22 only possible for array with shape [2,2]")
+det22 mat22
+    | shape mat22 == [2,2] = h00*h11 - h01*h10
+    | otherwise = error ("det22 only possible for a holor with shape [2,2]")
     where
-        a00 = arr22||![0,0]
-        a01 = arr22||![0,1]
-        a10 = arr22||![1,0]
-        a11 = arr22||![1,1]
+        h00 = mat22|!![0,0]
+        h01 = mat22|!![0,1]
+        h10 = mat22|!![1,0]
+        h11 = mat22|!![1,1]
 
 -- Laplace-Expansion by first row
-det33 :: (Unbox a, Num a) => Array a -> a
+det33 :: (Unbox a, Num a) => Holor a -> a
 {-# INLINE det33 #-}
 -- ^ determinant of 3x3 matrix
-det33 arr33
-    | shape arr33 == [3,3] = a00*(det22 m00) - a01*(det22 m01) + a02*(det22 m02)
-    | otherwise = error ("det33 only possible for array with shape [3,3]")
+det33 mat33
+    | shape mat33 == [3,3] = h00*(det22 m00) - h01*(det22 m01) + h02*(det22 m02)
+    | otherwise = error ("det33 only possible for a holor with shape [3,3]")
     where
-        a00 = arr33||![0,0]
-        a01 = arr33||![0,1]
-        a02 = arr33||![0,2]
-        m00 = arr33||!![[1,2],[1,2]]
-        m01 = arr33||!![[1,2],[0,2]]
-        m02 = arr33||!![[1,2],[0,1]]
+        h00 = mat33|!![0,0]
+        h01 = mat33|!![0,1]
+        h02 = mat33|!![0,2]
+        m00 = mat33||!![[1,2],[1,2]]
+        m01 = mat33||!![[1,2],[0,2]]
+        m02 = mat33||!![[1,2],[0,1]]
 
 -- Laplace-Expansion by first row
-det44 :: (Unbox a, Num a) => Array a -> a
+det44 :: (Unbox a, Num a) => Holor a -> a
 {-# INLINE det44 #-}
 -- ^ determinant of 4x4 matrix
-det44 arr44
-    | shape arr44 == [4,4] = a00*(det33 m00) - a01*(det33 m01) + a02*(det33 m02) - a03*(det33 m03)
-    | otherwise = error ("det44 only possible for array with shape [4,4]")
+det44 mat44
+    | shape mat44 == [4,4] = h00*(det33 m00) - h01*(det33 m01) + h02*(det33 m02) - h03*(det33 m03)
+    | otherwise = error ("det44 only possible for a holor with shape [4,4]")
     where
-        a00 = arr44||![0,0]
-        a01 = arr44||![0,1]
-        a02 = arr44||![0,2]
-        a03 = arr44||![0,3]
-        m00 = arr44||!![[1,2,3],[1,2,3]]
-        m01 = arr44||!![[1,2,3],[0,2,3]]
-        m02 = arr44||!![[1,2,3],[0,1,3]]
-        m03 = arr44||!![[1,2,3],[0,1,2]]
+        h00 = mat44|!![0,0]
+        h01 = mat44|!![0,1]
+        h02 = mat44|!![0,2]
+        h03 = mat44|!![0,3]
+        m00 = mat44||!![[1,2,3],[1,2,3]]
+        m01 = mat44||!![[1,2,3],[0,2,3]]
+        m02 = mat44||!![[1,2,3],[0,1,3]]
+        m03 = mat44||!![[1,2,3],[0,1,2]]
 
 
 {- TODO:
-inv :: (Unbox a, Fractional a) => Array a -> Array a
+inv :: (Unbox a, Fractional a) => Holor a -> Holor a
 {-# INLINE inv #-}
-inv arr = error "not implemented"
+inv hlr = error "not implemented"
 -}
 
 -- Link: https://de.wikipedia.org/wiki/Inverse_Matrix#Explizite_Formeln
-inv22 :: (Unbox a, Fractional a) => Array a -> Array a
+inv22 :: (Unbox a, Fractional a) => Holor a -> Holor a
 {-# INLINE inv22 #-}
 -- ^ inverse of 2x2 matrix
-inv22 arr22
-    | shape arr22 == [2,2] = (1/det22 arr22) *| (adjugate22 arr22)
-    | otherwise = error ("inv22 only possible for array with shape [2,2]")
+inv22 mat22
+    | shape mat22 == [2,2] = (1/det22 mat22) *| (adjugate22 mat22)
+    | otherwise = error ("inv22 only possible for a holor with shape [2,2]")
 
 -- Link: https://de.wikipedia.org/wiki/Inverse_Matrix#Explizite_Formeln
-inv33 :: (Unbox a, Fractional a) => Array a -> Array a
+inv33 :: (Unbox a, Fractional a) => Holor a -> Holor a
 {-# INLINE inv33 #-}
 -- ^ inverse of 3x3 matrix
-inv33 arr33
-    | shape arr33 == [3,3] = (1/det33 arr33) *| (adjugate33 arr33)
-    | otherwise = error ("inv33 only possible for array with shape [3,3]")
+inv33 mat33
+    | shape mat33 == [3,3] = (1/det33 mat33) *| (adjugate33 mat33)
+    | otherwise = error ("inv33 only possible for a holor with shape [3,3]")
 
 -- Link: https://semath.info/src/inverse-cofactor-ex4.html
-inv44 :: (Unbox a, Fractional a) => Array a -> Array a
+inv44 :: (Unbox a, Fractional a) => Holor a -> Holor a
 {-# INLINE inv44 #-}
 -- ^ inverse of 4x4 matrix
-inv44 arr44
-    | shape arr44 == [4,4] = (1/det44 arr44) *| (adjugate44 arr44)
-    | otherwise = error ("inv44 only possible for array with shape [4,4]")
+inv44 mat44
+    | shape mat44 == [4,4] = (1/det44 mat44) *| (adjugate44 mat44)
+    | otherwise = error ("inv44 only possible for a holor with shape [4,4]")
 
 
-selectNonzero :: (Unbox a, Num a, Eq a) => Array a -> [[Int]]
+selectNonzero :: (Unbox a, Num a, Eq a) => Holor a -> [[Int]]
 {-# INLINE selectNonzero #-}
--- ^ select all indices of array with nonzero elements
-selectNonzero arr = selectBy (/=0) arr
+-- ^ select all indices of a holor with nonzero elements
+selectNonzero hlr = selectBy (/=0) hlr
 
-countNonzero :: (Unbox a, Num a, Eq a) => Array a -> Int
+countNonzero :: (Unbox a, Num a, Eq a) => Holor a -> Int
 {-# INLINE countNonzero #-}
 -- ^ Number of nonzero elements
-countNonzero arr = countBy (/=0) arr
+countNonzero hlr = countBy (/=0) hlr
 
 
 

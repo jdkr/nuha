@@ -25,46 +25,46 @@ module Math.NuhaTest where
 -- import System.Clock (Clock(Monotonic), TimeSpec(..), toNanoSecs, getTime )
 import qualified Data.Vector.Unboxed as V
 
-import Math.Nuha.Instances
 import Math.Nuha.Types
 import Math.Nuha.Base
 import Math.Nuha.Numeric
 import Math.Nuha.Internal
 
 
-testInv44 :: Array Double
+testInv44 :: Holor Double
 testInv44 = (inv44 a) |.| a where
-    a = array [4,4] [3,4,6,2,4,7,9,5,2,3,7,9,5,2,2,4]
+    a = holor [4,4] [3,4,6,2,4,7,9,5,2,3,7,9,5,2,2,4]
 
-testInv33 :: Array Double
+testInv33 :: Holor Double
 testInv33 = inv33 a |.| a where
-    a = array [3,3] [0,1,2,3,4,5,6,7,9]
+    a = holor [3,3] [0,1,2,3,4,5,6,7,9]
 
-testAdj44 :: Array Double
+testAdj44 :: Holor Double
 testAdj44 = adjugate44 a where
-    a = array [4,4] [3,4,6,2,4,7,9,5,2,3,7,9,5,2,2,4]
+    a = holor [4,4] [3,4,6,2,4,7,9,5,2,3,7,9,5,2,2,4]
 
 testCartProd :: [[Int]]
 testCartProd =
     cartProd [[1,2],[11,22],[111,222]]
     -- cartProd [[0..999],[0..999]]
 
-testTranspose :: Array Int
+testTranspose :: Holor Int
 testTranspose = transpose a where
-    -- a = array [3,2,2] [1, 2, 3, 4, 11, 22, 33, 44, 111, 222, 333, 444]
-    -- a = array [4,3,2,2] [1, 2, 3, 4, 11, 22, 33, 44, 111, 222, 333, 444, 1, 2, 3, 4, 11, 22, 33, 44, 111, 222, 333, 444, 1, 2, 3, 4, 11, 22, 33, 44, 111, 222, 333, 444, 1, 2, 3, 4, 11, 22, 33, 44, 111, 222, 333, 444]
-    a = array [1000,1000] [0..999999]
+    -- a = holor [3,2,2] [1, 2, 3, 4, 11, 22, 33, 44, 111, 222, 333, 444]
+    -- a = holor [4,3,2,2] [1, 2, 3, 4, 11, 22, 33, 44, 111, 222, 333, 444, 1, 2, 3, 4, 11, 22, 33, 44, 111, 222, 333, 444, 1, 2, 3, 4, 11, 22, 33, 44, 111, 222, 333, 444, 1, 2, 3, 4, 11, 22, 33, 44, 111, 222, 333, 444]
+    -- a = holor [1000,1000] [0..999999]
+    a = holor [5,5] [0..24]
 
-testMult :: Array Double
+testMult :: Holor Double
 testMult = b |.| b where
-    b = array2d [[2,3,2], [5,2,6], [1,6,3]]
-    -- b = array [10,10] [0..99]
-    -- b = array [100,100] [0..9999]
-    -- b = array [500,500] [0..249999]
-    -- b = array [1000,1000] [0..999999]
+    b = matrix [[2,3,2], [5,2,6], [1,6,3]]
+    -- b = holor [10,10] [0..99]
+    -- b = holor [100,100] [0..9999]
+    -- b = holor [500,500] [0..249999]
+    -- b = holor [1000,1000] [0..999999]
 
 
-main = do
+test = do
     let a = testMult
     -- let a = testInv33
     -- let a = testInv44
