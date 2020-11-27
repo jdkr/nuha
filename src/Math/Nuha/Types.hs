@@ -12,17 +12,32 @@ import Data.Vector.Unboxed (Vector, Unbox, (!))
 import qualified Data.Vector.Unboxed as V
 -- import Foreign.Storable (Storable, sizeOf)
 -- import qualified Debug.Trace as D
-
 -- import Math.Nuha.Base (sizeOfElems)
 import Math.Nuha.Internal
 
 
--- | Datatype for a multidimensional array (holor), see https://en.wikipedia.org/wiki/Parry_Moon#Holors:
+{- | Datatype for a holor which is basically a multidimensional array. Sometimes in literature the word tensor is used instead, but this is not correct because a tensor has additional properties that do not apply for multidimensional arrays in general. For an explanation of holors see https://en.wikipedia.org/wiki/Parry_Moon#Holors
+
+Most often a holor is used as the type for a vector or matrix. Holors as row vectors have shape [1,n] and column vectors [m,1]. Matrices are of shape [m,n]. A holor with a single element has shape [1,1]. Note that the length of the shape is always at least two.
+
+The indexing of the holor entries starts with 0 in each dimension.
+-}
 data Holor a = Holor
     { hShape :: ![Int] -- ^ Shape of the holor. The dimension is the length of the shape
     , hStrides :: ![Int] -- ^ Step sizes for each dimension, needed for indexing
     , hValues :: !(Vector a)  -- ^ Values of the holor in row-major order
 }
+
+-- | Sum type of various errors that can be thrown in non trivial algorithms
+data Error
+    = NoUpperTriError
+    | DimensionMismatchError
+    | NoMatrixError
+    | NoSquareMatrixError
+    | TooFewRowsError
+    | RankDeficiencyError
+    | UnderdeterminedSystemError
+    deriving (Eq, Show)
 
 -- | 2-tuple
 type T2 a  = (a, a)
@@ -132,7 +147,7 @@ instance Storable a => Storable (Holor a) where
 
 
         let values = peekArray
-        let strides = frohShapeToStrides shape
+        let strides = fromShapeToStrides shape
         return $ Holor shape strides values
 
     {-# INLINE poke #-}

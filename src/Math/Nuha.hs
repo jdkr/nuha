@@ -20,7 +20,6 @@ module Math.Nuha
     , module Math.Nuha.Algorithms
     ) where
 
-
 import Math.Nuha.Types
 import Math.Nuha.Base
 import Math.Nuha.Numeric

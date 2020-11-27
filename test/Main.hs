@@ -1,3 +1,8 @@
--- TODO: write automatic test-suite
+module Main where
 
-main = return ()
+import qualified Math.NuhaTest as NuhaTest
+
+main :: IO ()
+main = do
+    NuhaTest.test
+    return ()
